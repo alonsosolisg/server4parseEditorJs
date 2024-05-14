@@ -1,27 +1,45 @@
-const express = require('express');
+const express = require("express");
 const bodyParser = require("body-parser");
 const jsdom = require("jsdom");
+const crypto = require("crypto");
 const app = express();
-const hostname = '127.0.0.1';
+const hostname = "127.0.0.1";
 const port = 8999;
-const host = hostname + ':' + port;
 
-app.use(bodyParser.urlencoded({extended: false}));
-
+app.use(bodyParser.urlencoded({ extended: false }));
 
 const options = {
-    runScripts: 'dangerously',
-    resources: "usable",
-    pretendToBeVisual: true,
-    includeNodeLocations: true,
+  runScripts: "dangerously",
+  resources: "usable",
+  pretendToBeVisual: true,
+  includeNodeLocations: true,
+  beforeParse(window) {
+    window.crypto = {
+      getRandomValues: function (buffer) {
+        return crypto.randomFillSync(buffer);
+      },
+    };
+
+    // Polyfill for matchMedia
+    window.matchMedia =
+      window.matchMedia ||
+      function () {
+        return {
+          matches: false,
+          addListener: function () {},
+          removeListener: function () {},
+        };
+      };
+  },
 };
 
-const {JSDOM} = jsdom;
-const {window} = new JSDOM(`
+const { JSDOM } = jsdom;
+const { window } = new JSDOM(
+  `
 <!DOCTYPE html>
 <div id="editorjs"></div>
-<script src="https://cdn.jsdelivr.net/npm/@editorjs/editorjs@latest"></script>
-<!--<script src="https://cdn.jsdelivr.net/npm/codex.editor.header@2.0.4/dist/bundle.js"></script>-->
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/editorjs@2.26.5"></script>
+<script src="https://cdn.jsdelivr.net/npm/codex.editor.header@latest/dist/bundle.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@editorjs/table@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@editorjs/header@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@editorjs/link@latest"></script>
@@ -35,61 +53,73 @@ const {window} = new JSDOM(`
 <script src="https://cdn.jsdelivr.net/npm/@editorjs/underline@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@editorjs/delimiter@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@editorjs/paragraph@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/codex.editor.paragraph@latest/dist/bundle.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@editorjs/list@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@editorjs/raw@latest"></script>
-<!--<script src="https://cdn.jsdelivr.net/npm/@editorjs/image@latest"></script>-->
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/image@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@editorjs/simple-image@latest"></script>
 <script>
-
-    
     const editor = new EditorJS({
-            holder: 'editorjs',
-            tools: {
-              header: Header,
-              image: SimpleImage,
-              checklist:Checklist,
-              list: List,
-              raw: RawTool,
-              quote: Quote,
-              Code: CodeTool,
-              warning: Warning,
-              Marker: Marker,
-              delimiter:Delimiter,
-              underline:Underline,
-              paragraph:Paragraph,
-              inlineCode:InlineCode,
-              table: Table
-            }
-    })
-
-    let me = this
-    editor.isReady.then(()=>{
-        me.editor = editor
-    })
-
-</script>`, options);
-
-window.blocks = null
-
-app.post('/html2blocks', function (req, res) {
-    if (window.editor) {
-        if (req.body.html) {
-            window.editor.blocks.renderFromHTML(req.body.html);
-            window.editor.save().then(data => {
-                console.log(data)
-                res.end(JSON.stringify(data))
-            })
-        } else {
-            res.end({code: -5, data: 'param error'})
+        holder: 'editorjs',
+        tools: {
+          header: Header,
+          image: SimpleImage,
+          checklist: Checklist,
+          list: List,
+          raw: RawTool,
+          quote: Quote,
+          Code: CodeTool,
+          warning: Warning,
+          Marker: Marker,
+          delimiter: Delimiter,
+          underline: Underline,
+          paragraph: Paragraph,
+          inlineCode: InlineCode,
+          table: Table
         }
+    });
+
+    let me = this;
+    editor.isReady.then(() => {
+        me.editor = editor;
+    }).catch(error => {
+        console.error('Editor failed to initialize:', error);
+    });
+</script>`,
+  options
+);
+
+app.post("/html2blocks", function (req, res) {
+  if (window.editor) {
+    if (req.body.html) {
+      window.editor.blocks
+        .renderFromHTML(req.body.html)
+        .then(() => {
+          window.editor
+            .save()
+            .then((data) => {
+              console.log("Editor data:", data);
+              res.json(data); // Use res.json to handle JSON properly
+            })
+            .catch((error) => {
+              console.error("Failed to save editor data:", error);
+              res
+                .status(500)
+                .json({ code: -6, data: "Failed to save editor data" });
+            });
+        })
+        .catch((error) => {
+          console.error("Failed to render HTML:", error);
+          res.status(500).json({ code: -6, data: "Failed to render HTML" });
+        });
     } else {
-        res.end({code: -7, data: 'editor init failed'})
+      res.status(400).json({ code: -5, data: "HTML content is missing" });
     }
-})
+  } else {
+    res.status(500).json({ code: -7, data: "Editor initialization failed" });
+  }
+});
 
-
-app.listen(port, hostname, function () {
-
-    console.log(`server run at http://${host}`);
-
+app.listen(port, hostname, () => {
+  console.log(`Server running at http://${hostname}:${port}/`);
 });
