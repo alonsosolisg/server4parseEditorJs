@@ -3,8 +3,7 @@ const bodyParser = require("body-parser");
 const jsdom = require("jsdom");
 const crypto = require("crypto");
 const app = express();
-const hostname = "127.0.0.1";
-const port = 8999;
+const port = 5000;
 
 app.use(bodyParser.urlencoded({ extended: false }));
 
@@ -120,6 +119,6 @@ app.post("/html2blocks", function (req, res) {
   }
 });
 
-app.listen(port, hostname, () => {
-  console.log(`Server running at http://${hostname}:${port}/`);
+app.listen(port, () => {
+  console.log(`Server running at ${port}`);
 });
